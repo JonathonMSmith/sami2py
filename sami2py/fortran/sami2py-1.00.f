@@ -141,7 +141,7 @@
           call output ( hrut,ntm,istep )
           tprnt   = 0.
         elseif ( tprnt .ge. dthr ) then
-          print *,'no ouput yet - hour = ',hrut
+          print *,'no output yet -- hour = ',hrut
           tprnt   = 0.
         endif
 
@@ -200,8 +200,9 @@
      .                year,day,mmass,
      .                nion1,nion2,hrinit,tvn0,tvexb0,ve01,
      .                gams,gamp,snn,stn,denmin,alt_crit,cqe,
-     .                Tinf_scl,euv_scl,hwm_mod
-
+     .                Tinf_scl,euv_scl,hwm_mod,
+     .                outn
+!     outn added to include the neutral parameters (JMS)
 
 !     read in parameters and initial ion density data
 
@@ -972,6 +973,15 @@
                enddo
             enddo
 
+            ang    = acos ( coschi )
+            itheta = nint ( ang / po180 ) - 90
+            itheta = int ( amax1 ( float(itheta), 1. ) )
+            do l = 1,linesnt
+               do j=nion1,nion2
+                  phprodr(iz,j) =   phprodr(iz,j)
+     .                 + sigint(l,j) * fluxnt(iz,nfl,itheta,l)
+               enddo
+            enddo
 !     nighttime deposition
 
          else                   ! sun is dowm
@@ -2396,7 +2406,7 @@
 
       include 'param-1.00.inc'
 
-!     arrays a,b,c, and d may be used for stoage of alfa, beta and x
+!     arrays a,b,c, and d may be used for storage of alfa, beta and x
 !     in the actual call of this routine, but remember, whatever you
 !     use will be lost by the definition of of alfa and beta here.
 !     form,  a(k)*x(k-1) + b(k)*x(k) + c(k)*x(k+1) = d(k)
@@ -2404,7 +2414,7 @@
 !     i have modified the input sequence to the routine, but have left it
 !     otherwise intact.  we may  want to eventually change this (gj)
 
-      dimension a(1),b(1),c(1),d(1),x(1)
+      dimension a(nz),b(nz),c(nz),d(nz),x(nz)
       dimension alfa(nz),beta(nz)
 
       nm1=n-1
@@ -2904,6 +2914,8 @@
 
       subroutine open_u
 
+      include 'param-1.00.inc'
+      include 'com-1.00.inc'
 !     open output files (unformatted, except time.dat)
 
       open ( unit=70, file='time.dat'      ,form='formatted'   )
@@ -2914,7 +2926,9 @@
 !      open ( unit=78, file='vnu.dat'       ,form='unformatted' )
 !      open ( unit=90, file='vtu.dat'       ,form='unformatted' )
 !      open ( unit=91, file='vru.dat'       ,form='unformatted' )
-!      open ( unit=92, file='dennu.dat'     ,form='unformatted' )
+      if (outn) then
+          open ( unit=92, file='dennu.dat'     ,form='unformatted' )
+      endif
 !      open ( unit=93, file='vexbu.dat'     ,form='unformatted' )
 
 !     diagnostic files (unformatted)
@@ -2925,7 +2939,9 @@
 !      open ( unit=84, file='u1u.dat'  ,form='unformatted' )
 !      open ( unit=85, file='u2u.dat'  ,form='unformatted' )
 !      open ( unit=86, file='u3u.dat'  ,form='unformatted' )
-!      open ( unit=87, file='u4u.dat'  ,form='unformatted' )
+      if (outn) then
+          open ( unit=87, file='u4u.dat'  ,form='unformatted' )
+      endif
 !      open ( unit=88, file='u5u.dat'  ,form='unformatted' )
 
       return
@@ -2941,6 +2957,8 @@
 
       subroutine open_f
 
+      include 'param-1.00.inc'
+      include 'com-1.00.inc'
 !     open output files (formatted)
 
       open ( unit=70, file='time.dat'      ,form='formatted' )
@@ -2951,7 +2969,9 @@
 !      open ( unit=78, file='vnf.dat'       ,form='formatted' )
 !      open ( unit=90, file='vtf.dat'       ,form='formatted' )
 !      open ( unit=91, file='vrf.dat'       ,form='formatted' )
-!      open ( unit=92, file='dennf.dat'     ,form='formatted' )
+      if ( outn ) then
+        open ( unit=92, file='dennf.dat'     ,form='formatted' )
+      endif
 !      open ( unit=93, file='vexbf.dat'     ,form='formatted' )
 
 !     diagnostic files (formatted)
@@ -2962,7 +2982,9 @@
 !      open ( unit=84, file='u1f.dat'  ,form='formatted' )
 !      open ( unit=85, file='u2f.dat'  ,form='formatted' )
 !      open ( unit=86, file='u3f.dat'  ,form='formatted' )
-!      open ( unit=87, file='u4f.dat'  ,form='formatted' )
+      if ( outn ) then
+        open ( unit=87, file='u4f.dat'  ,form='formatted' )
+      endif
 !      open ( unit=88, file='u5f.dat'  ,form='formatted' )
 
       return
@@ -3014,6 +3036,10 @@
 !         write(91,101) vor
 !         write(92,101) denn
        endif
+       if ( fmtout .and. outn ) then !added for RTGR (JMS)
+          write(87,101) u4
+          write(92,101) denn
+       endif
 
        if ( .not. fmtout ) then
          write(71) deni
@@ -3027,11 +3053,13 @@
 !         write(84) u1
 !         write(85) u2
 !         write(86) u3
-!         write(87) u4
+         if (outn) then
+           write(87) u4
 !         write(88) u5
 !         write(90) vot
 !         write(91) vor
-!         write(92) denn
+           write(92) denn
+         endif
 !         write(93) vexbp
        endif
 

@@ -20,12 +20,14 @@ Jeff Klenzing (JK), 1 Dec 2017, Goddard Space Flight Center (GSFC)
 """
 from os import path
 import numpy as np
+import xarray as xr
 from .utils import generate_path, get_unformatted_data
+
 
 class Model(object):
     """Python object to handle SAMI2 model output data
     """
-    def __init__(self, tag, year, day, lon, test=False):
+    def __init__(self, tag, lon, year, day, outn=False, test=False):
         """ Loads a previously run sami2 model and sorts into
             appropriate array shapes
 
@@ -39,6 +41,12 @@ class Model(object):
             year
         day : (int)
             day of year from Jan 1
+        outn : (boolean)
+            if true : look for neutral density and wind files
+            if false :  only look for default sami2 output
+        test : (boolean)
+            if true : use test model output
+            if false : look for user made model output
 
         Returns
         ---------
@@ -72,6 +80,7 @@ class Model(object):
         self.lon0 = lon
         self.year = year
         self.day = day
+        self.outn = outn
         self.test = test
 
         self._load_model()
@@ -114,13 +123,13 @@ class Model(object):
 
         mod_keys = self.check_standard_model()
         if mod_keys:
-            out.append('\nNo modifications to empirical models')
-        else:
             out.append('\nMultipliers used')
             out.append('----------------')
             for mkey in mod_keys:
                 out.append(('{s}: {f}').format(s=mkey,
                                                f=self.MetaData[mkey]))
+        else:
+            out.append('\nNo modifications to empirical models')
 
         return '\n'.join(out)
 
@@ -149,7 +158,7 @@ class Model(object):
         ni = 7
 
         model_path = generate_path(self.tag, self.lon0, self.year, self.day,
-                             self.test)
+                                   self.test)
 
         # Get NameList
         namelist_file = open(model_path + 'sami2py-1.00.namelist')
@@ -177,6 +186,11 @@ class Model(object):
             vsi = np.loadtxt(path.join(model_path, 'vsif.dat'))
             ti = np.loadtxt(path.join(model_path, 'tif.dat'))
             te = np.loadtxt(path.join(model_path, 'tef.dat'))
+
+            # get neutral values
+            if self.outn:
+                denn = np.loadtxt(path.join(model_path, 'dennf.dat'))
+                u4 = np.loadtxt(path.join(model_path, 'u4f.dat'))
         else:
             # Get Location
             glat = get_unformatted_data(model_path, 'glat')
@@ -192,17 +206,39 @@ class Model(object):
                                        dim0=dim0, dim1=dim1, reshape=True)
             ti = get_unformatted_data(model_path, 'ti',
                                       dim0=dim0, dim1=dim1, reshape=True)
+            if self.outn:
+                denn = get_unformatted_data(model_path, 'denn',
+                                            dim0=dim0, dim1=dim1, reshape=True)
+
+            # Electron Temperatures and neutral wind have only one species
+            dim0 = nz*nf + 2
             te = get_unformatted_data(model_path, 'te',
                                       dim0=dim0, dim1=dim1, reshape=True)
+            if self.outn:
+                u4 = get_unformatted_data(model_path, 'u4',
+                                           dim0=dim0, dim1=dim1, reshape=True)
 
-        self.glat = np.reshape(glat, (nz, nf), order="F")
-        self.glon = np.reshape(glon, (nz, nf), order="F")
-        self.zalt = np.reshape(zalt, (nz, nf), order="F")
-        self.deni = np.reshape(deni, (nz, nf, ni, nt), order="F")
-        self.vsi = np.reshape(vsi, (nz, nf, ni, nt), order="F")
-        self.ti = np.reshape(ti, (nz, nf, ni, nt), order="F")
-        self.te = np.reshape(te, (nz, nf, nt), order="F")
-        del glat, glon, zalt, deni, vsi, ti, te
+        glat = np.reshape(glat, (nz, nf), order="F")
+        glon = np.reshape(glon, (nz, nf), order="F")
+        zalt = np.reshape(zalt, (nz, nf), order="F")
+        deni = np.reshape(deni, (nz, nf, ni, nt), order="F")
+        vsi = np.reshape(vsi, (nz, nf, ni, nt), order="F")
+        ti = np.reshape(ti, (nz, nf, ni, nt), order="F")
+        te = np.reshape(te, (nz, nf, nt), order="F")
+        self.data = xr.Dataset({'deni': (['z', 'f', 'ion', 'ut'], deni),
+                                'vsi': (['z', 'f', 'ion', 'ut'], vsi),
+                                'ti': (['z', 'f', 'ion', 'ut'], ti),
+                                'te': (['z', 'f', 'ut'], te),
+                                'slt': (['ut'], self.slt)},
+                               coords={'glat': (['z', 'f'], glat),
+                                       'glon': (['z', 'f'], glon),
+                                       'zalt': (['z', 'f'], zalt),
+                                       'ut': self.ut})
+        if self.outn:
+            denn = np.reshape(denn, (nz, nf, ni, nt), order="F")
+            self.data['denn'] = (('z', 'f', 'ion', 'ut'), denn)
+            u4 = np.reshape(u4, (nz, nf, nt), order="F")
+            self.data['u4'] = (('z', 'f', 'ut'), u4)
 
     def _generate_metadata(self, namelist):
         """Reads the namelist and generates MetaData based on Parameters
@@ -322,11 +358,20 @@ class Model(object):
             time index for SAMI2 model results
         species : (int)
             ion species index :
-            1: H+, 2: O+, 3: NO+, 4: O2+, 5: He+, 6: N2+, 7: N+
+            0: H+, 1: O+, 2: NO+, 3: O2+, 4: He+, 5: N2+, 6: N+
         """
         import matplotlib.pyplot as plt
+        import warnings
 
-        plt.pcolor(self.glat, self.zalt, self.deni[:, :, species, time_step])
+        warnings.warn(' '.join(["Model.plot_lat_alt is deprecated and will be",
+                                "removed in a future version. ",
+                                "Use sami2py_vis instead"]),
+                      DeprecationWarning)
+
+        fig = plt.gcf()
+        plt.pcolor(self.data['glat'], self.data['zalt'],
+                   self.data['deni'][:, :, species, time_step])
         plt.xlabel('Geo Lat (deg)')
         plt.ylabel('Altitude (km)')
-        plt.show()
+
+        return fig

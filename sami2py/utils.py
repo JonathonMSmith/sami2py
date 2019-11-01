@@ -23,6 +23,8 @@ Jeff Klenzing (JK), 1 Dec 2017, Goddard Space Flight Center (GSFC)
 -------------------------------------------------------------------------------
 """
 
+import os
+
 
 def generate_path(tag, lon, year, day, test=False):
     """Creates a path based on run tag, date, and longitude
@@ -46,7 +48,6 @@ def generate_path(tag, lon, year, day, test=False):
     archive_path : (string)
         Complete path pointing to model archive for a given run
     """
-    from os import path
 
     if not isinstance(tag, str):
         raise TypeError
@@ -62,10 +63,10 @@ def generate_path(tag, lon, year, day, test=False):
     # a directory through set_archive_dir
     if top_directory:
         str_fmt = 'lon{lon:03d}/{year:4d}_{day:03d}/'
-        archive_path = path.join(top_directory, tag,
-                                 (str_fmt.format(lon=lon,
-                                                 year=year,
-                                                 day=day)))
+        archive_path = os.path.join(top_directory, tag,
+                                    (str_fmt.format(lon=lon,
+                                                    year=year,
+                                                    day=day)))
     else:
         raise NameError(''.join(('Archive Directory Not Specified: ',
                                  'Run sami2py.utils.set_archive_dir')))
@@ -74,27 +75,28 @@ def generate_path(tag, lon, year, day, test=False):
 
 
 def set_archive_dir(path=None, store=True):
-    """Set the top level directory pysat uses to look for data and reload.
+    # type: (str, bool) -> None
+    """Set the top level directory sami2py uses to look for data and reload.
 
     Parameters
     ----------
     path : string
-        valid path to directory pysat uses to look for data
+        valid path to directory sami2py uses to look for data
     store : bool
         if True, store data directory for future runs
     """
-    import os
     import sami2py
 
+    path = os.path.expanduser(path)
     if os.path.isdir(path):
         if store:
-            with open(os.path.join(os.path.expanduser('~'),
-                                   '.sami2py', 'archive_path.txt'),
+            with open(os.path.join(sami2py.sami2py_dir, 'archive_path.txt'),
                       'w') as archive_file:
                 archive_file.write(path)
         sami2py.archive_dir = path
     else:
         raise ValueError('Path does not lead to a valid directory.')
+
 
 def get_unformatted_data(dat_dir, var_name, reshape=False, dim0=0, dim1=0):
     """Routine to interpret unformatted binary files created by the SAMI2 model
@@ -123,12 +125,13 @@ def get_unformatted_data(dat_dir, var_name, reshape=False, dim0=0, dim1=0):
         unformatted data organized into a numpy array for handling in python
     """
     import numpy as np
-    from os import path
-    binary_file = open(path.join(dat_dir, var_name + 'u.dat'), 'rb')
+
+    binary_file = open(os.path.join(dat_dir, var_name + 'u.dat'), 'rb')
     float_data = np.fromfile(binary_file, dtype='float32')
     binary_file.close()
 
     if reshape:
-        float_data.shape = (dim0, dim1)
+        float_data = np.reshape(float_data, (dim0, dim1), order='F')
         return float_data[1:-1, :]
-    return float_data[1:-1]
+    else:
+        return float_data[1:-1]

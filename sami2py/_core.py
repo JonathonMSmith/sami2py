@@ -32,8 +32,9 @@ Jeff Klenzing (JK), 1 Dec 2017, Goddard Space Flight Center (GSFC)
 import os
 import subprocess
 import numpy as np
-from sami2py import fortran_dir, __version__
+from sami2py import fortran_dir # , __version__
 from .utils import generate_path
+from ._cdf_utils import _archive_model
 
 
 def run_model(tag='model_run', lat=0, lon=0, alt=300, year=2018, day=1,
@@ -259,7 +260,7 @@ def run_model(tag='model_run', lat=0, lon=0, alt=300, year=2018, day=1,
     if not test:
         _ = subprocess.check_call('./sami2py.x')
 
-    _archive_model(archive_path, clean, fejer, fmtout, outn)
+    _archive_model(archive_path, info, clean)
 
     os.chdir(current_dir)
 
@@ -352,54 +353,54 @@ def _generate_namelist(info):
     file.close()
 
 
-def _archive_model(path, clean, fejer, fmtout, outn):
-    """Moves the model output files to a common archive
-
-    Parameters
-    ----------
-    path : (string)
-        full path of file destination
-    clean : (boolean)
-        If True, then delete dat files locally
-    fejer : (boolean)
-        Specifies whether Fejer-Scherliess model is used
-        If False, then 'exb.inp' is also archived
-    """
-    import shutil
-    import subprocess
-
-    if fmtout:
-        filelist = ['glonf.dat', 'glatf.dat', 'zaltf.dat',
-                    'denif.dat', 'vsif.dat', 'tif.dat', 'tef.dat',
-                    'time.dat', 'sami2py-1.00.namelist']
-        if outn:
-            filelist.append('dennf.dat')
-            filelist.append('u4f.dat')
-    else:
-        filelist = ['glonu.dat', 'glatu.dat', 'zaltu.dat',
-                    'deniu.dat', 'vsiu.dat', 'tiu.dat', 'teu.dat',
-                    'time.dat', 'sami2py-1.00.namelist']
-        if outn:
-            filelist.append('dennu.dat')
-            filelist.append('u4u.dat')
-
-    if os.path.isfile(filelist[0]):
-        try:
-            os.stat(path)
-        except FileNotFoundError:
-            os.makedirs(path)
-
-        hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'])
-        with open(os.path.join(path, 'version.txt'), 'w+') as f:
-            f.write('sami2py v' + __version__ + '\n')
-            f.write('short hash ' + hash.decode("utf-8"))
-
-        for list_file in filelist:
-            shutil.copyfile(list_file, os.path.join(path, list_file))
-        if clean:
-            for list_file in filelist[:-1]:
-                os.remove(list_file)
-        if not fejer:
-            shutil.copyfile('exb.inp', os.path.join(path, 'exb.inp'))
-    else:
-        print('No files to move!')
+#def _archive_model(path, clean, fejer, fmtout, outn):
+#    """Moves the model output files to a common archive
+#
+#    Parameters
+#    ----------
+#    path : (string)
+#        full path of file destination
+#    clean : (boolean)
+#        If True, then delete dat files locally
+#    fejer : (boolean)
+#        Specifies whether Fejer-Scherliess model is used
+#        If False, then 'exb.inp' is also archived
+#    """
+#    import shutil
+#    import subprocess
+#
+#    if fmtout:
+#        filelist = ['glonf.dat', 'glatf.dat', 'zaltf.dat',
+#                    'denif.dat', 'vsif.dat', 'tif.dat', 'tef.dat',
+#                    'time.dat', 'sami2py-1.00.namelist']
+#        if outn:
+#            filelist.append('dennf.dat')
+#            filelist.append('u4f.dat')
+#    else:
+#        filelist = ['glonu.dat', 'glatu.dat', 'zaltu.dat',
+#                    'deniu.dat', 'vsiu.dat', 'tiu.dat', 'teu.dat',
+#                    'time.dat', 'sami2py-1.00.namelist']
+#        if outn:
+#            filelist.append('dennu.dat')
+#            filelist.append('u4u.dat')
+#
+#    if os.path.isfile(filelist[0]):
+#        try:
+#            os.stat(path)
+#        except FileNotFoundError:
+#            os.makedirs(path)
+#
+#        hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'])
+#        with open(os.path.join(path, 'version.txt'), 'w+') as f:
+#            f.write('sami2py v' + __version__ + '\n')
+#            f.write('short hash ' + hash.decode("utf-8"))
+#
+#        for list_file in filelist:
+#            shutil.copyfile(list_file, os.path.join(path, list_file))
+#        if clean:
+#            for list_file in filelist[:-1]:
+#                os.remove(list_file)
+#        if not fejer:
+#            shutil.copyfile('exb.inp', os.path.join(path, 'exb.inp'))
+#    else:
+#        print('No files to move!')

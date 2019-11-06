@@ -10,7 +10,7 @@ from sami2py import __version__
 from .utils import get_unformatted_data
 
 
-def _archive_model(path, info, clean):
+def _archive_model(path, info, clean, test):
     """Moves the model output files to a common archive
 
     Parameters
@@ -53,7 +53,10 @@ def _archive_model(path, info, clean):
             f.write('short hash ' + hash.decode("utf-8"))
 
         # load dat files into xarray
-        model = _load_model(info)
+        if test:
+            model = xr.Dataset()
+        else:
+            model = _load_model(info)
 
         if not info['fejer']:
             model.attrs['ExB model'] = 'Fouerier Series'
@@ -64,7 +67,9 @@ def _archive_model(path, info, clean):
             for list_file in filelist[:-1]:
                 os.remove(list_file)
         # export model with metadata to the archive directory as a netCDF
-        model.to_netcdf(path)
+        if not test:
+            filename = os.path.join(path, 'sami.nc')
+            model.to_netcdf(filename)
     else:
         print('No files to move!')
 
@@ -165,6 +170,7 @@ def _load_model(info):
                               'ut': ut})
     data.attrs = info
     if info['outn']:
+        print(info['outn'])
         denn = np.reshape(denn, (nz, nf, ni, nt), order="F")
         data['denn'] = (('z', 'f', 'ion', 'ut'), denn)
         u4 = np.reshape(u4, (nz, nf, nt), order="F")

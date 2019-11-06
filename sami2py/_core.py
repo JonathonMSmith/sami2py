@@ -241,26 +241,23 @@ def run_model(tag='model_run', lat=0, lon=0, alt=300, year=2018, day=1,
     info = {'year': year, 'day': day, 'lat': lat, 'lon': lon, 'alt': alt,
             'f107': f107, 'f107a': f107a, 'ap': ap,
             'rmin': rmin, 'rmax': rmax, 'gams': gams, 'gamp': gamp,
-            'altmin': altmin,
+            'altmin': altmin, 'fejer': fejer, 'outn': outn, 'fmtout': fmtout,
             'dthr': dthr, 'hrinit': hrinit, 'hrpr': hrpr, 'hrmax': hrmax,
             'dt0': dt0, 'maxstep': maxstep, 'denmin': denmin,
             'nion1': nion1, 'nion2': nion2, 'mmass': mmass, 'h_scale': h_scale,
             'o_scale': o_scale, 'no_scale': no_scale, 'o2_scale': o2_scale,
             'he_scale': he_scale, 'n2_scale': n2_scale, 'n_scale': n_scale,
-            'exb_scale': exb_scale, 've01': ve01, 'alt_crit': alt_crit,
-            'cqe': cqe, 'euv_scale': euv_scale,
+            'exb_drifts': ExB_drifts, 'exb_scale': exb_scale, 've01': ve01,
+            'alt_crit': alt_crit, 'cqe': cqe, 'euv_scale': euv_scale,
             'Tinf_scale': Tinf_scale, 'Tn_scale': Tn_scale,
             'wind_scale': wind_scale, 'hwm_model': hwm_model}
 
-    info['fejer'] = _generate_drift_info(fejer, ExB_drifts)
-    info['fmtout'] = _generate_fortran_bool(fmtout)
-    info['outn'] = _generate_fortran_bool(outn)
     _generate_namelist(info)
     archive_path = generate_path(tag, lon, year, day, test)
     if not test:
         _ = subprocess.check_call('./sami2py.x')
 
-    _archive_model(archive_path, info, clean)
+    _archive_model(archive_path, info, clean, test)
 
     os.chdir(current_dir)
 
@@ -300,12 +297,16 @@ def _generate_namelist(info):
     if info['hwm_model'] not in [93, 7, 14]:
         print('Invalid HWM Model.  Defaulting to HWM14')
         info['hwm_model'] = 14
+    # Make fortran bools
+    fejer = _generate_drift_info(info['fejer'], info['exb_drifts'])
+    fmtout = _generate_fortran_bool(info['fmtout'])
+    outn = _generate_fortran_bool(info['outn'])
 
     # Print out namelist file
     file = open('sami2py-1.00.namelist', 'w')
 
     file.write('&go\n')
-    file.write(('  fmtout   = {:s},\n').format(info['fmtout']))  # 1
+    file.write(('  fmtout   = {:s},\n').format(fmtout))  # 1
     file.write(('  maxstep  =  {:d},\n').format(info['maxstep']))  # 2
     file.write(('  hrmax    =  {:f},\n').format(info['hrmax']))  # 3
     file.write(('  dt0      =  {:f},\n').format(info['dt0']))  # 4
@@ -314,7 +315,7 @@ def _generate_namelist(info):
     file.write(('  grad_in  =  {:f},\n').format(info['alt']))  # 7
     file.write(('  glat_in  =  {:f},\n').format(info['lat']))  # 8
     file.write(('  glon_in  =  {:f},\n').format(info['lon']))  # 9
-    file.write(('  fejer    =  {:s},\n').format(info['fejer']))  # 10
+    file.write(('  fejer    =  {:s},\n').format(fejer))  # 10
     file.write(('  rmin     =  {:f},\n').format(info['rmin']))  # 11
     file.write(('  rmax     =  {:f},\n').format(info['rmax']))  # 12
     file.write(('  altmin   =  {:f},\n').format(info['altmin']))  # 13
@@ -347,7 +348,7 @@ def _generate_namelist(info):
     file.write(('  Tinf_scl =  {:f},\n').format(info['Tinf_scale']))  # 33
     file.write(('  euv_scl  =  {:f},\n').format(info['euv_scale']))  # 34
     file.write(('  hwm_mod  =  {:d},\n').format(info['hwm_model']))  # 35
-    file.write(('  outn     = {:s}\n').format(info['outn']))  # 36
+    file.write(('  outn     = {:s}\n').format(outn))  # 36
     file.write('&end\n')
 
     file.close()
